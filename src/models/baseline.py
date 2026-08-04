@@ -51,7 +51,7 @@ def train_cv(X, y, cat_features, config):
     
     # 評価指標の設定（デフォルトは AUC）
     
-    oof_preds = np.zeros(len(X))
+    oof = np.zeros(len(X))
     models = []
     feature_importances = pd.DataFrame(index=X.columns)
 
@@ -76,13 +76,13 @@ def train_cv(X, y, cat_features, config):
         # 学習
         model.fit(
             X_train, y_train, categorical_feature=cat_features,
-            eval_set=[(X_val, y_val)],
+            eval_X=X_val, eval_y=y_val,
             callbacks=callbacks
         )
 
         # 検証データの予測確率取得 (1クラス目の確率)
         val_preds = model.predict_proba(X_val)[:, 1]
-        oof_preds[val_idx] = val_preds
+        oof[val_idx] = val_preds
 
         # スコア出力
         fold_auc = roc_auc_score(y_val, val_preds)
@@ -93,7 +93,7 @@ def train_cv(X, y, cat_features, config):
         feature_importances[f"fold_{fold + 1}"] = model.feature_importances_
 
     # CVスコア計算
-    cv_score = roc_auc_score(y, oof_preds)
+    cv_score = roc_auc_score(y, oof)
 
     # 特徴量重要度の整理 (各フォールドの平均と標準偏差)
     importance = pd.DataFrame({
@@ -102,10 +102,6 @@ def train_cv(X, y, cat_features, config):
         "importance_std": feature_importances.std(axis=1).values
     }).sort_values(by="importance_mean", ascending=False).reset_index(drop=True)
 
-    # OOFデータの整理
-    oof = pd.DataFrame({
-        "oof_pred": oof_preds
-    })
 
     # メトリクスのまとめ
     metrics = {

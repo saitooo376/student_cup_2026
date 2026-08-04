@@ -53,7 +53,9 @@ def main():
     joblib.dump(model, save_dir / "model.pkl")
 
     # save oof
-    oof.to_csv(save_dir / "oof.csv", index=False)
+    id_col = config["data"]["id"]
+    oof_df = pd.DataFrame({"企業ID": train[id_col], "target": y, "prediction": oof})
+    oof_df.to_csv(save_dir / "oof.csv", index=False)
 
     
     # save importance
@@ -66,8 +68,7 @@ def main():
  
     # inference
     pred = model.predict_proba(test)[:, 1]
-    pred_label = (pred >= 0.5).astype(int)
-    id_col = config["data"]["id"]
+    pred_label = (pred >= 0.2).astype(int)
     submission = pd.DataFrame({
         id_col: test[id_col],
         "target": pred_label
