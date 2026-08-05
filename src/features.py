@@ -120,9 +120,137 @@ def add_financial_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+import numpy as np
+import pandas as pd
 
+
+def add_softwhere_features(df: pd.DataFrame) -> pd.DataFrame:
+    """総資産、売上、従業員数に対する無形固定資産変動の対数特徴量を追加する関数.
+
+    ※ 不要な中間対数カラム（log_総資産など）は削除し、最終結果のみを保持します。
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        財務・企業情報が格納された DataFrame
+
+    Returns
+    -------
+    pd.DataFrame
+        最終特徴量のみが追加された DataFrame
+    """
+    df = df.copy()
+
+    # ゼロ割りを防止するヘルパー関数
+    def safe_div(num, den):
+        den_clean = den.replace(0, np.nan)
+        return num / den_clean
+
+    # 無形固定資産変動のカラム名を判定
+    intangible_col = "無形固定資産変動(ソフトウェア関連)"
+      
+    # 一時的に使用する作業用カラム名のリスト
+    temp_cols = []
+
+    # 1. 一時的な対数変数の作成
+    if intangible_col is not None:
+        abs_change = -df[intangible_col]
+        df["_temp_log_無形正数"] = np.log1p(abs_change.clip(lower=0))
+        temp_cols.append("_temp_log_無形正数")
+
+    if "総資産" in df.columns:
+        df["_temp_log_総資産"] = np.log1p(df["総資産"].clip(lower=0))
+        temp_cols.append("_temp_log_総資産")
+
+    if "売上" in df.columns:
+        df["_temp_log_売上"] = np.log1p(df["売上"].clip(lower=0))
+        temp_cols.append("_temp_log_売上")
+
+    if "従業員数" in df.columns:
+        df["_temp_log_従業員数"] = np.log1p(df["従業員数"].clip(lower=0))
+        temp_cols.append("_temp_log_従業員数")
+
+    # 2. 最終特徴量の作成
+    if "_temp_log_無形正数" in df.columns:
+        if "_temp_log_総資産" in df.columns:
+            df["無形固定資産変動_対_総資産比"] = safe_div(
+                df["_temp_log_無形正数"], df["_temp_log_総資産"]
+            )
+
+        if "_temp_log_売上" in df.columns:
+            df["無形固定資産変動_対_売上比"] = safe_div(
+                df["_temp_log_無形正数"], df["_temp_log_売上"]
+            )
+
+        if "_temp_log_従業員数" in df.columns:
+            df["一人当たり無形固定資産変動"] = safe_div(
+                df["_temp_log_無形正数"], df["_temp_log_従業員数"]
+            )
+
+    # 3. 中間作成した作業用対数カラムの破棄
+    df = df.drop(columns=temp_cols, errors="ignore")
+
+    return df
+
+
+#　上と一番効いていた特徴量にかける
+# def add_softwhere_survey_features(df: pd.DataFrame) -> pd.DataFrame:
+#     """無形固定資産変動の対数特徴量に対し、アンケート項目（1, 2, 7, 8）を掛け合わせた特徴量を追加する関数.
+
+#     Parameters
+#     ----------
+#     df : pd.DataFrame
+#         財務・企業情報、対数特徴量、およびアンケート結果が格納された DataFrame
+
+#     Returns
+#     -------
+#     pd.DataFrame
+#         アンケート項目との掛け算特徴量が追加された DataFrame
+#     """
+#     df = df.copy()
+
+#     # 対象とする無形固定資産変動系の対数特徴量カラムを特定
+#     target_log_cols = [
+#         col
+#         for col in [
+#             "log_無形固定資産変動_対_総資産比",
+#             "log_無形固定資産変動_対_売上比",
+#             "log_一人当たり無形固定資産変動",
+#         ]
+#         if col in df.columns
+#     ]
+
+#     # 掛け算対象となる対数特徴量が存在しない場合は警告を出してそのまま返す
+#     if not target_log_cols:
+#         print(
+#             "Warning: 対象となる対数特徴量が見つかりませんでした。"
+#             "先に add_softwhere_features() を実行してください。"
+#         )
+#         return df
+
+#     # 1. (6 - アンケート２) * アンケート７ * アンケート８ の重み計算
+#     q_cols_A = ["アンケート２", "アンケート７", "アンケート８"]
+#     if all(col in df.columns for col in q_cols_A):
+#         weight_A = (
+#             (6 - df["アンケート２"])
+#             * df["アンケート７"]
+#             * df["アンケート８"]
+#         )
+
+#         for col in target_log_cols:
+#             df[f"{col}_x_アンケート2_7_8"] = df[col] * weight_A
+
+#     # 2. アンケート１ の重み計算
+#     if "アンケート１" in df.columns:
+#         weight_B = df["アンケート１"]
+
+#         for col in target_log_cols:
+#             df[f"{col}_x_アンケート1"] = df[col] * weight_B
+
+#     return df
 
 
 def create_features(df):
     df = add_financial_features(df)
+    df = add_softwhere_features(df)
     return df
