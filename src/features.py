@@ -173,17 +173,17 @@ def add_softwhere_features(df: pd.DataFrame) -> pd.DataFrame:
     # 2. 最終特徴量の作成
     if "_temp_log_無形正数" in df.columns:
         if "_temp_log_総資産" in df.columns:
-            df["無形固定資産変動_対_総資産比"] = safe_div(
+            df["sw支出_対_総資産比"] = safe_div(
                 df["_temp_log_無形正数"], df["_temp_log_総資産"]
             )
 
         if "_temp_log_売上" in df.columns:
-            df["無形固定資産変動_対_売上比"] = safe_div(
+            df["sw支出_対_売上比"] = safe_div(
                 df["_temp_log_無形正数"], df["_temp_log_売上"]
             )
 
         if "_temp_log_従業員数" in df.columns:
-            df["一人当たり無形固定資産変動"] = safe_div(
+            df["一人当たりsw支出"] = safe_div(
                 df["_temp_log_無形正数"], df["_temp_log_従業員数"]
             )
 
