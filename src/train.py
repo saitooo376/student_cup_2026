@@ -32,7 +32,8 @@ def main():
     test = load_test()
 
     target = config["data"]["target"]
-    drop_cols = config["feature"]["drop_columns"] + [target]
+    id_col = config["data"]["id"]
+    drop_cols = config["feature"]["drop_columns"] + [target] + [id_col]
     cat_features = config["feature"]["categorical_features"]
 
     train, test = convert_category(train, test, cat_features)
@@ -40,7 +41,7 @@ def main():
     X = train.drop(columns=drop_cols)
     y = train[target]
 
-    test = test.drop(columns=config["feature"]["drop_columns"])
+    test = test.drop(columns=config["feature"]["drop_columns"] )
 
     # train
     model, oof, importance, metrics = train_cv(
@@ -74,8 +75,15 @@ def main():
     # save model
     joblib.dump(model, save_dir / "model.pkl")
 
+    # save features
+    feature_path = save_dir / "features.txt"
+    with open(feature_path, "w", encoding="utf-8") as f:
+        for col in X.columns:
+            f.write(f"{col}\n")
+    
+    joblib.dump(X.columns.tolist(), save_dir / "feature_columns.pkl")
+
     # save oof
-    id_col = config["data"]["id"]
     oof_df = pd.DataFrame({"企業ID": train[id_col], "target": y, "prediction": oof})
     oof_df.to_csv(save_dir / "oof.csv", index=False)
 
@@ -89,7 +97,7 @@ def main():
 
  
     # inference
-    pred = model.predict_proba(test)[:, 1]
+    pred = model.predict_proba(test.drop(columns=id_col))[:, 1]
     pred_label = (pred >= best_threshold).astype(int)
     submission = pd.DataFrame({
         id_col: test[id_col],
