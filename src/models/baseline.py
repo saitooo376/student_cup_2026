@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import lightgbm as lgb
 from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, f1_score
 
 
 class EnsembleModel:
@@ -52,6 +52,7 @@ def train_cv(X, y, cat_features, config):
     # 評価指標の設定（デフォルトは AUC）
     
     oof = np.zeros(len(X))
+    fold_scores = []
     models = []
     feature_importances = pd.DataFrame(index=X.columns)
 
@@ -86,7 +87,21 @@ def train_cv(X, y, cat_features, config):
 
         # スコア出力
         fold_auc = roc_auc_score(y_val, val_preds)
-        print(f"Fold {fold + 1} - AUC: {fold_auc:.5f}")
+
+        # モデルの安定性確認用
+        fold_f1 = f1_score(y_val, (val_preds >= 0.5).astype(int))
+
+        #　foldごと各指標の保存
+        fold_scores.append({"fold": fold + 1, 
+                            "auc": fold_auc, 
+                            "f1": fold_f1, 
+                            "best_iteration": model.best_iteration_
+                            })
+
+        print(f"Fold {fold+1} "
+                f"AUC:{fold_auc:.5f} "
+                f"F1:{fold_f1:.5f}")
+                                            
 
         # モデルの保存と特徴量重要度の記録
         models.append(model)
@@ -104,8 +119,17 @@ def train_cv(X, y, cat_features, config):
 
 
     # メトリクスのまとめ
-    metrics = {
-        "cv_score": float(cv_score)
-    }
+    metrics = { "cv_auc": float(cv_score),
+
+                "fold_scores": fold_scores,
+
+                "auc_mean": np.mean([x["auc"] for x in fold_scores]),
+
+                "auc_std": np.std([x["auc"] for x in fold_scores]),
+
+                "f1_mean": np.mean([x["f1"] for x in fold_scores]),
+
+                "f1_std": np.std([x["f1"] for x in fold_scores])
+                }
 
     return EnsembleModel(models), oof, importance, metrics

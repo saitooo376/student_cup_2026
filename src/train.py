@@ -1,6 +1,8 @@
 import argparse
 import joblib
 import pandas as pd
+import numpy as np
+from sklearn.metrics import f1_score
 from pathlib import Path
 
 from src.data import load_train, load_test, convert_category
@@ -49,6 +51,26 @@ def main():
     )
 
 
+    # threshold探索
+    thresholds = np.arange(0.01, 0.5, 0.01)
+
+    best_f1 = 0
+    best_threshold = 0
+
+    for t in thresholds:
+        pred = (oof >= t).astype(int)
+
+        score = f1_score(y, pred)
+
+        if score > best_f1:
+            best_f1 = score
+            best_threshold = t
+
+    metrics.update({
+    "oof_f1": float(best_f1),
+    "best_threshold": float(best_threshold)})
+
+
     # save model
     joblib.dump(model, save_dir / "model.pkl")
 
@@ -68,7 +90,7 @@ def main():
  
     # inference
     pred = model.predict_proba(test)[:, 1]
-    pred_label = (pred >= 0.2).astype(int)
+    pred_label = (pred >= best_threshold).astype(int)
     submission = pd.DataFrame({
         id_col: test[id_col],
         "target": pred_label
@@ -77,7 +99,9 @@ def main():
     submission.to_csv(save_dir / "submission.csv", index=False, header=False)
 
     print("=" * 40)
-    print(f"CV Score : {metrics['cv_score']:.5f}")
+    print(f"AUC      : {metrics['cv_auc']:.5f}")
+    print(f"OOF F1   : {metrics['oof_f1']:.5f}")
+    print(f"Threshold: {metrics['best_threshold']:.2f}")
     print(f"Saved to : {save_dir}")
     print("=" * 40)
 
