@@ -7,7 +7,7 @@ from pathlib import Path
 
 from src.data import load_train, load_test, convert_category
 from src.cv_features import create_cv_features
-from src.models.light_gbm_cv import train_cv
+from src.models.model_exp006 import train_cv
 from src.config import load_config
 from src.io import save_metrics
 from src.paths import OUTPUT_DIR
@@ -42,9 +42,12 @@ def main():
     X = train.drop(columns=drop_cols)
     y = train[target]
 
-    test = test.drop(columns=config["feature"]["drop_columns"] )
+    test_ids = test[id_col].copy()
+    test_X = test.drop(columns=config["feature"]["drop_columns"] )
+    test_X = test_X.drop(columns=id_col)
+
     _, full_train_stats = create_cv_features(X)
-    test, _ = create_cv_features(test, stats_dict=full_train_stats)
+    test_X, _ = create_cv_features(test_X, stats_dict=full_train_stats)
 
     # train
     model, oof, importance, metrics = train_cv(
@@ -54,12 +57,33 @@ def main():
         config
     )
 
-    # [変更] CV内で特徴量が増えるため
-    feature_columns = model.models[0].feature_name_
 
-    for fold, fold_model in enumerate(model.models[1:], start=1):
-        if fold_model.feature_name_ != feature_columns:
-            raise ValueError(f"fold {fold} で特徴量列が一致していません。")
+    feature_columns = (
+        model.models[0]["model"]
+        .feature_name_
+    )
+
+    # 全モデルで特徴量が一致しているか確認
+    for i, model_info in enumerate(
+        model.models
+    ):
+
+        current_features = (
+            model_info["model"]
+            .feature_name_
+        )
+
+        if current_features != feature_columns:
+
+            raise ValueError(
+                f"model {i} "
+                f"(seed={model_info['seed']}, "
+                f"fold={model_info['fold']}) "
+                f"で特徴量列が一致していません。"
+            )
+
+    # testも学習時と同じ列順にする
+    test_X = test_X[feature_columns]
 
 
     # threshold探索
@@ -108,10 +132,10 @@ def main():
 
  
     # inference
-    pred = model.predict_proba(test.drop(columns=id_col))[:, 1]
+    pred = model.predict_proba(test_X)[:, 1]
     pred_label = (pred >= best_threshold).astype(int)
     submission = pd.DataFrame({
-        id_col: test[id_col],
+        id_col: test_ids,
         "target": pred_label
     })
 
@@ -121,6 +145,8 @@ def main():
     print(f"AUC      : {metrics['cv_auc']:.5f}")
     print(f"OOF F1   : {metrics['oof_f1']:.5f}")
     print(f"Threshold: {metrics['best_threshold']:.2f}")
+    print(f"Seeds    : {metrics['seeds']}")
+    print(f"Models   : {metrics['n_models']}")
     print(f"Saved to : {save_dir}")
     print("=" * 40)
 
