@@ -173,6 +173,45 @@ def add_software_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+
+def add_location_ratio_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    事業所数・工場数・店舗数・従業員数から拠点集中度や1拠点あたり人数の比率特徴量(r_*)を生成する関数
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        '従業員数', '事業所数', '工場数', '店舗数' を含むデータフレーム
+
+    Returns
+    -------
+    pd.DataFrame
+        新しい特徴量を追加したデータフレーム
+    """
+    df = df.copy()
+
+    # 各カラムの取得（欠損値は0として扱う）
+    emp = df["従業員数"].fillna(0)
+    office = df["事業所数"].fillna(0)
+    factory = df["工場数"].fillna(0)
+    store = df["店舗数"].fillna(0)
+
+    # 全拠点数（分母）
+    total_locations = office + factory + store
+
+    # 1. r_1拠点あたり従業員数
+    df["r_1拠点あたり従業員数"] = np.where(
+        total_locations > 0, emp / total_locations, np.nan
+    )
+
+    # 2. r_オフィス集中度
+    df["r_オフィス集中度"] = np.where(
+        total_locations > 0, office / total_locations, np.nan
+    )
+
+    return df
+
+
 def transform_numeric_features(
     df: pd.DataFrame,
     skew_threshold: float = 1.5,
@@ -367,6 +406,7 @@ def add_gyoukai_group(df: pd.DataFrame) -> pd.DataFrame:
 def create_features(df):
     df = add_financial_features(df)
     df = add_software_features(df)
+    df = add_location_ratio_features(df)
     df = transform_numeric_features(df)
-    df = add_gyoukai_group(df)
+    #df = add_gyoukai_group(df)
     return df
