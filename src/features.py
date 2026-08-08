@@ -408,5 +408,5 @@ def create_features(df):
     df = add_software_features(df)
     df = add_location_ratio_features(df)
     df = transform_numeric_features(df)
-    #df = add_gyoukai_group(df)
+    df = add_gyoukai_group(df)
     return df

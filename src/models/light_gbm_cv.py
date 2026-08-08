@@ -5,6 +5,8 @@ import lightgbm as lgb
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_auc_score, f1_score
 
+from src.cv_features import create_cv_features
+
 
 class EnsembleModel:
     """
@@ -54,7 +56,7 @@ def train_cv(X, y, cat_features, config):
     oof = np.zeros(len(X))
     fold_scores = []
     models = []
-    feature_importances = pd.DataFrame(index=X.columns)
+    feature_importances_dict = {}
 
     # K-Foldの設定（分類問題を想定して StratifiedKFold を使用）
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
@@ -64,6 +66,17 @@ def train_cv(X, y, cat_features, config):
     for fold, (train_idx, val_idx) in enumerate(skf.split(X, y)):
         X_train, y_train = X.iloc[train_idx], y.iloc[train_idx]
         X_val, y_val = X.iloc[val_idx], y.iloc[val_idx]
+
+        #==================変更================
+        # CV内特徴量　の追加
+        X_train, stats_dict = create_cv_features(X_train)
+        X_val, _ = create_cv_features(X_val, stats_dict=stats_dict)
+        #=====================================
+
+        # fit 直前で確認
+        for col in X_train.columns:
+            if X_train[col].apply(lambda x: isinstance(x, (list, np.ndarray))).any():
+                print(f"【原因列】 {col} に配列データが入っています！")
 
         # モデル作成
         model = lgb.LGBMClassifier(**model_params)
@@ -105,17 +118,20 @@ def train_cv(X, y, cat_features, config):
 
         # モデルの保存と特徴量重要度の記録
         models.append(model)
-        feature_importances[f"fold_{fold + 1}"] = model.feature_importances_
-
+        feature_importances_dict[f"fold_{fold + 1}"] = model.feature_importances_
+        feature_names = X_train.columns
     # CVスコア計算
     cv_score = roc_auc_score(y, oof)
 
     # 特徴量重要度の整理 (各フォールドの平均と標準偏差)
+    feature_importances = pd.DataFrame(feature_importances_dict, index=feature_names)
+
     importance = pd.DataFrame({
-        "feature": X.columns,
+        "feature": feature_names,
         "importance_mean": feature_importances.mean(axis=1).values,
         "importance_std": feature_importances.std(axis=1).values
     }).sort_values(by="importance_mean", ascending=False).reset_index(drop=True)
+
 
 
     # メトリクスのまとめ
